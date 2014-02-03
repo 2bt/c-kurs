@@ -176,8 +176,8 @@ int main(int argc, char** argv) {
 	new_stone(&grid);
 	grid.stones = 0;
 
-	// bot
 /*
+	// bot test
 	int dx = 0;
 	int dy = 0;
 	int rot = 0;
@@ -234,10 +234,12 @@ int main(int argc, char** argv) {
 			}
 		}
 
-
+		// bot
 		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
+
+
 		update(&grid, dx, dy, rot, fall);
-//		if (grid.state == OVER) running = 0;
+		if (grid.state == OVER) running = 0;
 
 
 		SDL_FillRect(screen, NULL, 0x222222);
