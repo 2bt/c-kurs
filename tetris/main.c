@@ -39,9 +39,10 @@ int pos_y;
 int rotation;
 int stone;
 int lines;
-int drop;
-int falling;
+int tick;
+enum { NORMAL, FALLING, BLINK } state;
 int cells[GRID_HEIGHT][GRID_WIDTH];
+int full_lines[GRID_HEIGHT];
 
 
 int collision(int* over) {
@@ -59,33 +60,19 @@ int collision(int* over) {
 	return 0;
 }
 
+
 void new_stone(void) {
 	pos_x = GRID_WIDTH / 2 - 2;
 	pos_y = -1;
 	stone = rand() % (sizeof(STONE_DATA) / sizeof(STONE_DATA[0]));
 	rotation = rand() % 4;
-	drop = 0;
-}
-
-
-void clear_lines(void) {
-	int x, y;
-	for (y = 0; y < GRID_HEIGHT; y++) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-			if (cells[y][x] == 0) break;
-		}
-		if (x == GRID_WIDTH) {
-			lines++;
-			memmove(cells[1], cells[0], y * sizeof(cells[0]));
-			memset(cells[0], 0, sizeof(cells[0]));
-		}
-	}
+	tick = 0;
 }
 
 
 int update(int dx, int dy, int rot, int fall) {
 
-	if (!falling) {
+	if (state == NORMAL) {
 
 		int old_rot = rotation;
 		rotation = (rotation + rot + 4) % 4;
@@ -94,21 +81,24 @@ int update(int dx, int dy, int rot, int fall) {
 		pos_x += dx;
 		if (collision(NULL)) pos_x -= dx;
 
-		falling = fall;
+		tick++;
+
+		if (fall) state = FALLING;
 	}
 
-	if (falling || drop > 50 || dy) {
-		drop = 0;
+	if (state == FALLING
+	|| (state == NORMAL && (tick > 50 || dy))) {
+		tick = 0;
 		pos_y++;
 		if (collision(NULL)) {
-			falling = 0;
+			state = NORMAL;
 			pos_y--;
 
 			int over;
 			collision(&over);
 			if (over) return 1;
 
-			int i;
+			int x, y, i;
 			for (i = 0; i < 16; i++) {
 				if (STONE_DATA[stone][i] >> rotation & 1) {
 					if (pos_y + i / 4 >= 0) {
@@ -117,26 +107,63 @@ int update(int dx, int dy, int rot, int fall) {
 				}
 			}
 
-			clear_lines();
-			new_stone();
+			for (y = 0; y < GRID_HEIGHT; y++) {
+				for (x = 0; x < GRID_WIDTH; x++) {
+					if (cells[y][x] == 0) break;
+				}
+				full_lines[y] = 0;
+				if (x == GRID_WIDTH) {
+					full_lines[y] = 1;
+					lines++;
+					state = BLINK;
+				}
+			}
+			if (state != BLINK) new_stone();
 		}
 	}
-	else drop++;
+
+	if (state == BLINK) {
+		if (++tick > 30) {
+			tick = 0;
+			state = NORMAL;
+			new_stone();
+
+			int y;
+			for (y = 0; y < GRID_HEIGHT; y++) {
+				if (full_lines[y]) {
+					memmove(cells[1], cells[0], y * sizeof(cells[0]));
+					memset(cells[0], 0, sizeof(cells[0]));
+				}
+			}
+		}
+	}
 
 	return 0;
 }
 
+
 void draw(void) {
 	SDL_FillRect(screen, NULL, 0x222222);
 	int x, y, i;
-	for (i = 0; i < 16; i++) {
-		if (STONE_DATA[stone][i] >> rotation & 1) {
-			draw_cell(pos_x + i % 4, pos_y + i / 4, 0xffffff);
+
+	if (state != BLINK) {
+		for (i = 0; i < 16; i++) {
+			if (STONE_DATA[stone][i] >> rotation & 1) {
+				draw_cell(pos_x + i % 4, pos_y + i / 4, 0xffffff);
+			}
 		}
 	}
 	for (y = 0; y < GRID_HEIGHT; y++) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-			if (cells[y][x]) draw_cell(x, y, 0x0000ff);
+
+		if (state == BLINK && full_lines[y]) {
+			if (tick % 14 < 7) {
+				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, 0xffffff);
+			}
+		}
+		else {
+			for (x = 0; x < GRID_WIDTH; x++) {
+				if (cells[y][x]) draw_cell(x, y, 0x0000ff);
+			}
 		}
 	}
 }
