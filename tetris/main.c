@@ -1,11 +1,10 @@
 #include <stdio.h>
-#include <limits.h>
-#include <string.h>
 #include <time.h>
 #include <SDL/SDL.h>
 
+#include "tetris.h"
 
-const char STONE_DATA[][16] = {
+const char STONE_DATA[7][16] = {
 	{0x0,0xa,0x0,0x0,0x5,0xf,0x5,0x5,0x0,0xa,0x0,0x0,0x0,0xa}, // I
 	{0x0,0x0,0x0,0x0,0x0,0xf,0xf,0x0,0x0,0xf,0xf}, // O
 	{0x4,0x5,0x8,0x0,0xa,0xf,0xa,0x0,0x2,0x5,0x1}, // L
@@ -15,30 +14,6 @@ const char STONE_DATA[][16] = {
 	{0xa,0x0,0x0,0x0,0xa,0xf,0x5,0x0,0x5,0xf,0x0}, // S
 //	{0x9,0x5,0x3,0x0,0xa,0xf,0xa,0x0,0xc,0x5,0x6}, // big T
 };
-
-
-enum {
-	CELL_SIZE = 20,
-	GRID_WIDTH = 10,
-	GRID_HEIGHT = 20,
-	STONE_COUNT = sizeof(STONE_DATA) / sizeof(STONE_DATA[0])
-};
-
-
-typedef struct {
-	int x;
-	int y;
-	int rot;
-	int stone;
-	int perm[STONE_COUNT];
-	int perm_pos;
-	int lines;
-	int stones;
-	int tick;
-	enum { NORMAL, FALLING, BLINK, OVER } state;
-	int cells[GRID_HEIGHT][GRID_WIDTH];
-	int full_lines[GRID_HEIGHT];
-} Grid;
 
 
 SDL_Surface* screen;
@@ -69,112 +44,6 @@ int collision(const Grid* grid, int over) {
 }
 
 
-
-
-
-
-int rate_grid(Grid* grid) {
-
-	int x, y;
-	int magic = 0;
-
-	for (y = 0; y < GRID_HEIGHT; y++) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-
-			if (grid->cells[y][x]) magic += y;
-			else if (y > 0 && grid->cells[y - 1][x]) magic -= 20;
-
-			if (grid->cells[y][x]) {
-				if (y > 0 && grid->cells[y - 1][x]) magic += 20;
-				if (x == 0 || grid->cells[y][x - 1]) magic += 20;
-				if (y == GRID_HEIGHT - 1 || grid->cells[y + 1][x]) magic += 20;
-				if (x == GRID_WIDTH - 1  || grid->cells[y][x + 1]) magic += 20;
-			}
-		}
-	}
-
-	// remove full lines
-	for (y = 0; y < GRID_HEIGHT; y++) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-			if (grid->cells[y][x] == 0) break;
-		}
-		if (x == GRID_WIDTH) {
-			memmove(grid->cells[1], grid->cells[0], y * sizeof(grid->cells[0]));
-			memset(grid->cells[0], 0, sizeof(grid->cells[0]));
-		}
-	}
-
-
-	int height = 0;
-	for (y = GRID_HEIGHT - 1; y >= 0; y--) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-			if (grid->cells[y][x]) height = GRID_HEIGHT - y - 1;
-		}
-	}
-
-	magic -= height * 4;
-	return magic;
-}
-
-
-
-void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
-
-	static Grid bot_grid;
-	Grid* bot = &bot_grid;
-
-	*dx = 0;
-	*dy = 0;
-	*rot = 0;
-	*fall = 0;
-
-	int magic = INT_MIN;
-
-	int save_rot = grid->rot;
-	int r;
-	for (r = 0; r < 4; r++) {
-		if (collision(grid, 0)) break;
-
-		int save_x = grid->x;
-		int dir = grid->stones & 1 ? -1 : 1;
-
-		while (!collision(grid, 0)) grid->x -= dir;
-		grid->x += dir;
-
-		while (!collision(grid, 0)) {
-			int save_y = grid->y;
-
-			while (!collision(grid, 0)) grid->y++;
-			grid->y--;
-			if (!collision(grid, 1)) {
-				memcpy(bot, grid, sizeof(Grid));
-
-				int i;
-				for (i = 0; i < 16; i++) {
-					if (STONE_DATA[grid->stone][i] >> grid->rot & 1) {
-						if (grid->y + i / 4 >= 0) {
-							bot->cells[grid->y + i / 4][grid->x + i % 4] = 1;
-						}
-					}
-				}
-
-				int m = rate_grid(bot);
-				if (m > magic) {
-					magic = m;
-
-					*dx = (grid->x > save_x) - (grid->x < save_x);
-					*rot = save_rot != grid->rot;
-					*fall = grid->x - save_x == 0 && save_rot == grid->rot;
-				}
-			}
-			grid->y = save_y;
-			grid->x += dir;
-		}
-		grid->x = save_x;
-		grid->rot = (grid->rot + 1) & 3;
-	}
-	grid->rot = save_rot;
-}
 
 
 
@@ -309,14 +178,14 @@ int main(int argc, char** argv) {
 
 	// bot
 /*
+	int dx = 0;
+	int dy = 0;
+	int rot = 0;
+	int fall = 0;
 	while (1) {
-		int dx = 0;
-		int dy = 0;
-		int rot = 0;
-		int fall = 0;
-		bot(&grid, &dx, &dy, &rot, &fall);
+		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
 		update(&grid, dx, dy, rot, fall);
-		if (grid.state == OVER) {
+		if (grid.state == OVER || grid.lines > 1000) {
 			printf("%8d\n", grid.lines);
 
 			memset(&grid, 0, sizeof(grid));
@@ -366,7 +235,7 @@ int main(int argc, char** argv) {
 		}
 
 
-		if (grid.state != OVER) bot(&grid, &dx, &dy, &rot, &fall);
+		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
 		update(&grid, dx, dy, rot, fall);
 //		if (grid.state == OVER) running = 0;
 
@@ -382,3 +251,4 @@ int main(int argc, char** argv) {
 	SDL_Quit();
 	return 0;
 }
+
