@@ -25,12 +25,16 @@ const char STONE_DATA[][16] = {
 
 SDL_Surface* screen;
 
-void draw_cell(int x, int y, uint32_t c) {
+void draw_cell(int x, int y, uint32_t border, uint32_t fill) {
 	SDL_Rect rect = {
 		x * CELL_SIZE, y * CELL_SIZE,
 		CELL_SIZE, CELL_SIZE
 	};
-	SDL_FillRect(screen, &rect, c);
+	SDL_FillRect(screen, &rect, border);
+	rect.x = x * CELL_SIZE + 1;
+	rect.y = y * CELL_SIZE + 1;
+	rect.w = rect.h = CELL_SIZE - 2;
+	SDL_FillRect(screen, &rect, fill);
 }
 
 
@@ -149,7 +153,7 @@ void draw(void) {
 	if (state != BLINK) {
 		for (i = 0; i < 16; i++) {
 			if (STONE_DATA[stone][i] >> rotation & 1) {
-				draw_cell(pos_x + i % 4, pos_y + i / 4, 0xffffff);
+				draw_cell(pos_x + i % 4, pos_y + i / 4, 0x777777, 0xaaaaaa);
 			}
 		}
 	}
@@ -157,12 +161,12 @@ void draw(void) {
 
 		if (state == BLINK && full_lines[y]) {
 			if (tick % 14 < 7) {
-				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, 0xffffff);
+				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, 0xdddddd, 0xffffff);
 			}
 		}
 		else {
 			for (x = 0; x < GRID_WIDTH; x++) {
-				if (cells[y][x]) draw_cell(x, y, 0x0000ff);
+				if (cells[y][x]) draw_cell(x, y, 0x0000aa, 0x0000ff);
 			}
 		}
 	}
