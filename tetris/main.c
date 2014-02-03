@@ -18,6 +18,7 @@ const char STONE_DATA[][16] = {
 	{0x0,0xe,0x0,0x0,0x7,0xf,0xd,0x0,0x0,0xb,0x0}, // T
 	{0x0,0x0,0xa,0x0,0x5,0xf,0xa,0x0,0x0,0xf,0x5}, // Z
 	{0xa,0x0,0x0,0x0,0xa,0xf,0x5,0x0,0x5,0xf,0x0}, // S
+	{0x9,0x5,0x3,0x0,0xa,0xf,0xa,0x0,0xc,0x5,0x6}, // big T
 };
 
 
@@ -39,6 +40,7 @@ int rotation;
 int stone;
 int lines;
 int drop;
+int falling;
 int cells[GRID_HEIGHT][GRID_WIDTH];
 
 
@@ -81,20 +83,25 @@ void clear_lines(void) {
 }
 
 
-int update(int dx, int dy, int rot) {
+int update(int dx, int dy, int rot, int fall) {
 
-	int old_rot = rotation;
-	rotation = (rotation + rot + 4) % 4;
-	if (collision(NULL)) rotation = old_rot;
+	if (!falling) {
 
-	pos_x += dx;
-	if (collision(NULL)) pos_x -= dx;
+		int old_rot = rotation;
+		rotation = (rotation + rot + 4) % 4;
+		if (collision(NULL)) rotation = old_rot;
 
+		pos_x += dx;
+		if (collision(NULL)) pos_x -= dx;
 
-	if (drop > 50 || dy) {
+		falling = fall;
+	}
+
+	if (falling || drop > 50 || dy) {
 		drop = 0;
 		pos_y++;
 		if (collision(NULL)) {
+			falling = 0;
 			pos_y--;
 
 			int over;
@@ -162,6 +169,7 @@ int main(int argc, char** argv) {
 		int dx = 0;
 		int dy = 0;
 		int rot = 0;
+		int fall = 0;
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -173,6 +181,7 @@ int main(int argc, char** argv) {
 				if (event.key.keysym.sym == SDLK_DOWN) dy++;
 				if (event.key.keysym.sym == SDLK_x) rot--;
 				if (event.key.keysym.sym == SDLK_c) rot++;
+				if (event.key.keysym.sym == SDLK_SPACE) fall = 1;
 				break;
 
 			case SDL_QUIT:
@@ -182,7 +191,7 @@ int main(int argc, char** argv) {
 		}
 
 
-		if (update(dx, dy, rot)) running = 0;
+		if (update(dx, dy, rot, fall)) running = 0;
 
 		draw();
 
