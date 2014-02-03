@@ -34,7 +34,7 @@ typedef struct {
 	int lines;
 	int stones;
 	int tick;
-	enum { NORMAL, FALLING, BLINK } state;
+	enum { NORMAL, FALLING, BLINK, OVER } state;
 	int cells[GRID_HEIGHT][GRID_WIDTH];
 	int full_lines[GRID_HEIGHT];
 } Grid;
@@ -61,7 +61,7 @@ int collision(const Grid* grid, int over) {
 			int y = grid->y + i / 4;
 			if (x < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) return 1;
 			if (y >= 0 && grid->cells[y][x]) return 1;
-			else if (over && grid->cells[y][x]) return 1;
+			if (y < 0 && over) return 1;
 		}
 	}
 	return 0;
@@ -83,7 +83,7 @@ int rate_grid(Grid* grid) {
 			if (grid->cells[y][x]) magic += y;
 			else if (y > 0 && grid->cells[y - 1][x]) magic -= 20;
 
-			if (grid->cells[y][x] == 127) {
+			if (grid->cells[y][x]) {
 				if (y > 0 && grid->cells[y - 1][x]) magic += 20;
 				if (x == 0 || grid->cells[y][x - 1]) magic += 20;
 				if (y == GRID_HEIGHT - 1 || grid->cells[y + 1][x]) magic += 20;
@@ -111,7 +111,7 @@ int rate_grid(Grid* grid) {
 		}
 	}
 
-	magic -= height * 6;
+	magic -= height * 20;
 	return magic;
 }
 
@@ -119,7 +119,7 @@ int rate_grid(Grid* grid) {
 
 void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 
-	static Grid bot_grid;
+	Grid bot_grid;
 	Grid* bot = &bot_grid;
 
 	*dx = 0;
@@ -164,7 +164,7 @@ void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 					first = 0;
 
 					*dx = (grid->x > save_x) - (grid->x < save_x);
-					*rot = rand() & 1 ? 0 : save_rot != grid->rot;
+					*rot = save_rot != grid->rot;
 					*fall = grid->x - save_x == 0 && save_rot == grid->rot;
 				}
 			}
@@ -180,9 +180,11 @@ void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 
 
 
-
 void new_stone(Grid* grid) {
 	grid->stones++;
+	grid->x = GRID_WIDTH / 2 - 2;
+	grid->y = -1;
+	grid->rot = rand() % 4;
 
 	// knuth shuffle
 	if (--grid->perm_pos < 0) {
@@ -198,15 +200,10 @@ void new_stone(Grid* grid) {
 		}
 	}
 	grid->stone = grid->perm[grid->perm_pos];
-
-
-	grid->rot = rand() % 4;
-	grid->x = GRID_WIDTH / 2 - 2;
-	grid->y = -1;
 }
 
 
-int update(Grid* grid, int dx, int dy, int rot, int fall) {
+void update(Grid* grid, int dx, int dy, int rot, int fall) {
 
 	if (grid->state == NORMAL) {
 
@@ -230,7 +227,10 @@ int update(Grid* grid, int dx, int dy, int rot, int fall) {
 			grid->state = NORMAL;
 			grid->y--;
 
-			if (collision(grid, 1)) return 1;
+			if (collision(grid, 1)) {
+				grid->state = OVER;
+				return;
+			}
 
 			int x, y, i;
 			for (i = 0; i < 16; i++) {
@@ -258,7 +258,6 @@ int update(Grid* grid, int dx, int dy, int rot, int fall) {
 
 	if (grid->state == BLINK) {
 		if (++grid->tick > 30) {
-//		if (1) {
 			grid->tick = 0;
 			grid->state = NORMAL;
 			new_stone(grid);
@@ -272,14 +271,13 @@ int update(Grid* grid, int dx, int dy, int rot, int fall) {
 			}
 		}
 	}
-
-	return 0;
 }
 
 
 void draw(const Grid* grid) {
 	int x, y, i;
-	if (grid->state != BLINK) {
+	if (grid->state == NORMAL
+	||	grid->state == FALLING) {
 		for (i = 0; i < 16; i++) {
 			if (STONE_DATA[grid->stone][i] >> grid->rot & 1) {
 				draw_cell(grid->x + i % 4, grid->y + i / 4, 0x777777, 0xaaaaaa);
@@ -302,28 +300,44 @@ void draw(const Grid* grid) {
 
 
 int main(int argc, char** argv) {
-
 	srand(time(NULL));
+
+	Grid grid;
+
+	// init grid
+	memset(&grid, 0, sizeof(grid));
+	new_stone(&grid);
+	grid.stones = 0;
+
+/*
+	// bot
+	while (1) {
+		int dx = 0;
+		int dy = 0;
+		int rot = 0;
+		int fall = 0;
+		bot(&grid, &dx, &dy, &rot, &fall);
+		update(&grid, dx, dy, rot, fall);
+		if (grid.state == OVER) {
+			printf("%8d\n", grid.lines);
+
+			memset(&grid, 0, sizeof(grid));
+			new_stone(&grid);
+			grid.stones = 0;
+		}
+	}
+*/
 
 	SDL_Init(SDL_INIT_VIDEO);
 	screen = SDL_SetVideoMode(
 		GRID_WIDTH * CELL_SIZE,
 		GRID_HEIGHT * CELL_SIZE,
 		32, SDL_HWSURFACE | SDL_DOUBLEBUF);
-
-
 	if (!screen) {
 		SDL_Quit();
 		return 1;
 	}
-
 	SDL_EnableKeyRepeat(100, 50);
-
-
-	Grid grid;
-	memset(&grid, 0, sizeof(grid));
-	new_stone(&grid);
-	grid.stones = 0;
 
 
 	int running = 1;
@@ -354,9 +368,9 @@ int main(int argc, char** argv) {
 		}
 
 
-		bot(&grid, &dx, &dy, &rot, &fall);
-
-		if (update(&grid, dx, dy, rot, fall)) running = 0;
+		if (grid.state != OVER) bot(&grid, &dx, &dy, &rot, &fall);
+		update(&grid, dx, dy, rot, fall);
+//		if (grid.state == OVER) running = 0;
 
 
 		SDL_FillRect(screen, NULL, 0x222222);
