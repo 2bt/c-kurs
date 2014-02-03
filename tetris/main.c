@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <limits.h>
 #include <string.h>
 #include <time.h>
 #include <SDL/SDL.h>
@@ -107,11 +108,11 @@ int rate_grid(Grid* grid) {
 	int height = 0;
 	for (y = GRID_HEIGHT - 1; y >= 0; y--) {
 		for (x = 0; x < GRID_WIDTH; x++) {
-			if (grid->cells[y][x]) height = 19 - y;
+			if (grid->cells[y][x]) height = GRID_HEIGHT - y - 1;
 		}
 	}
 
-	magic -= height * 20;
+	magic -= height * 4;
 	return magic;
 }
 
@@ -119,7 +120,7 @@ int rate_grid(Grid* grid) {
 
 void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 
-	Grid bot_grid;
+	static Grid bot_grid;
 	Grid* bot = &bot_grid;
 
 	*dx = 0;
@@ -127,8 +128,7 @@ void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 	*rot = 0;
 	*fall = 0;
 
-	int magic = 0;
-	int first = 1;
+	int magic = INT_MIN;
 
 	int save_rot = grid->rot;
 	int r;
@@ -159,9 +159,8 @@ void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 				}
 
 				int m = rate_grid(bot);
-				if (first || m > magic) {
+				if (m > magic) {
 					magic = m;
-					first = 0;
 
 					*dx = (grid->x > save_x) - (grid->x < save_x);
 					*rot = save_rot != grid->rot;
@@ -176,7 +175,6 @@ void bot(Grid* grid, int* dx, int* dy, int* rot, int* fall) {
 	}
 	grid->rot = save_rot;
 }
-
 
 
 
@@ -309,8 +307,8 @@ int main(int argc, char** argv) {
 	new_stone(&grid);
 	grid.stones = 0;
 
-/*
 	// bot
+/*
 	while (1) {
 		int dx = 0;
 		int dy = 0;
@@ -326,7 +324,7 @@ int main(int argc, char** argv) {
 			grid.stones = 0;
 		}
 	}
-*/
+//*/
 
 	SDL_Init(SDL_INIT_VIDEO);
 	screen = SDL_SetVideoMode(
