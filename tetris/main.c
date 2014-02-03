@@ -10,6 +10,19 @@ enum {
 };
 
 
+typedef struct {
+	int pos_x;
+	int pos_y;
+	int rotation;
+	int stone;
+	int lines;
+	int tick;
+	enum { NORMAL, FALLING, BLINK } state;
+	int cells[GRID_HEIGHT][GRID_WIDTH];
+	int full_lines[GRID_HEIGHT];
+} Grid;
+
+
 const char STONE_DATA[][16] = {
 	{0x0,0xa,0x0,0x0,0x5,0xf,0x5,0x5,0x0,0xa,0x0,0x0,0x0,0xa}, // I
 	{0x0,0x0,0x0,0x0,0x0,0xf,0xf,0x0,0x0,0xf,0xf}, // O
@@ -22,14 +35,11 @@ const char STONE_DATA[][16] = {
 };
 
 
-
 SDL_Surface* screen;
 
+
 void draw_cell(int x, int y, uint32_t border, uint32_t fill) {
-	SDL_Rect rect = {
-		x * CELL_SIZE, y * CELL_SIZE,
-		CELL_SIZE, CELL_SIZE
-	};
+	SDL_Rect rect = { x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
 	SDL_FillRect(screen, &rect, border);
 	rect.x = x * CELL_SIZE + 1;
 	rect.y = y * CELL_SIZE + 1;
@@ -38,105 +48,90 @@ void draw_cell(int x, int y, uint32_t border, uint32_t fill) {
 }
 
 
-int pos_x;
-int pos_y;
-int rotation;
-int stone;
-int lines;
-int tick;
-enum { NORMAL, FALLING, BLINK } state;
-int cells[GRID_HEIGHT][GRID_WIDTH];
-int full_lines[GRID_HEIGHT];
-
-
-int collision(int* over) {
-	if (over) *over = 0;
+int collision(const Grid* grid, int over) {
 	int i;
 	for (i = 0; i < 16; i++) {
-		if (STONE_DATA[stone][i] >> rotation & 1) {
-			int x = pos_x + i % 4;
-			int y = pos_y + i / 4;
+		if (STONE_DATA[grid->stone][i] >> grid->rotation & 1) {
+			int x = grid->pos_x + i % 4;
+			int y = grid->pos_y + i / 4;
 			if (x < 0 || x >= GRID_WIDTH || y >= GRID_HEIGHT) return 1;
-			if (y >= 0 && cells[y][x]) return 1;
-			else if (over && cells[y][x]) *over = 1;
+			if (y >= 0 && grid->cells[y][x]) return 1;
+			else if (over && grid->cells[y][x]) return 1;
 		}
 	}
 	return 0;
 }
 
 
-void new_stone(void) {
-	pos_x = GRID_WIDTH / 2 - 2;
-	pos_y = -1;
-	stone = rand() % (sizeof(STONE_DATA) / sizeof(STONE_DATA[0]));
-	rotation = rand() % 4;
-	tick = 0;
+void new_stone(Grid* grid) {
+	grid->pos_x = GRID_WIDTH / 2 - 2;
+	grid->pos_y = -1;
+	grid->stone = rand() % (sizeof(STONE_DATA) / sizeof(STONE_DATA[0]));
+	grid->rotation = rand() % 4;
 }
 
 
-int update(int dx, int dy, int rot, int fall) {
+int update(Grid* grid, int dx, int dy, int rot, int fall) {
 
-	if (state == NORMAL) {
+	if (grid->state == NORMAL) {
 
-		int old_rot = rotation;
-		rotation = (rotation + rot + 4) % 4;
-		if (collision(NULL)) rotation = old_rot;
+		int old_rot = grid->rotation;
+		grid->rotation = (grid->rotation + rot + 4) % 4;
+		if (collision(grid, 0)) grid->rotation = old_rot;
 
-		pos_x += dx;
-		if (collision(NULL)) pos_x -= dx;
+		grid->pos_x += dx;
+		if (collision(grid, 0)) grid->pos_x -= dx;
 
-		tick++;
+		grid->tick++;
 
-		if (fall) state = FALLING;
+		if (fall) grid->state = FALLING;
 	}
 
-	if (state == FALLING
-	|| (state == NORMAL && (tick > 50 || dy))) {
-		tick = 0;
-		pos_y++;
-		if (collision(NULL)) {
-			state = NORMAL;
-			pos_y--;
+	if (grid->state == FALLING
+	|| (grid->state == NORMAL && (grid->tick > 50 || dy))) {
+		grid->tick = 0;
+		grid->pos_y++;
+		if (collision(grid, 0)) {
+			grid->state = NORMAL;
+			grid->pos_y--;
 
-			int over;
-			collision(&over);
-			if (over) return 1;
+			if (collision(grid, 1)) return 1;
 
 			int x, y, i;
 			for (i = 0; i < 16; i++) {
-				if (STONE_DATA[stone][i] >> rotation & 1) {
-					if (pos_y + i / 4 >= 0) {
-						cells[pos_y + i / 4][pos_x + i % 4] = 1;
+				if (STONE_DATA[grid->stone][i] >> grid->rotation & 1) {
+					if (grid->pos_y + i / 4 >= 0) {
+						grid->cells[grid->pos_y + i / 4][grid->pos_x + i % 4] = 1;
 					}
 				}
 			}
 
 			for (y = 0; y < GRID_HEIGHT; y++) {
 				for (x = 0; x < GRID_WIDTH; x++) {
-					if (cells[y][x] == 0) break;
+					if (grid->cells[y][x] == 0) break;
 				}
-				full_lines[y] = 0;
+				grid->full_lines[y] = 0;
 				if (x == GRID_WIDTH) {
-					full_lines[y] = 1;
-					lines++;
-					state = BLINK;
+					grid->full_lines[y] = 1;
+					grid->lines++;
+					grid->state = BLINK;
 				}
 			}
-			if (state != BLINK) new_stone();
+			if (grid->state != BLINK) new_stone(grid);
 		}
 	}
 
-	if (state == BLINK) {
-		if (++tick > 30) {
-			tick = 0;
-			state = NORMAL;
-			new_stone();
+	if (grid->state == BLINK) {
+		if (++grid->tick > 30) {
+			grid->tick = 0;
+			grid->state = NORMAL;
+			new_stone(grid);
 
 			int y;
 			for (y = 0; y < GRID_HEIGHT; y++) {
-				if (full_lines[y]) {
-					memmove(cells[1], cells[0], y * sizeof(cells[0]));
-					memset(cells[0], 0, sizeof(cells[0]));
+				if (grid->full_lines[y]) {
+					memmove(grid->cells[1], grid->cells[0], y * sizeof(grid->cells[0]));
+					memset(grid->cells[0], 0, sizeof(grid->cells[0]));
 				}
 			}
 		}
@@ -146,32 +141,28 @@ int update(int dx, int dy, int rot, int fall) {
 }
 
 
-void draw(void) {
-	SDL_FillRect(screen, NULL, 0x222222);
+void draw(const Grid* grid) {
 	int x, y, i;
-
-	if (state != BLINK) {
+	if (grid->state != BLINK) {
 		for (i = 0; i < 16; i++) {
-			if (STONE_DATA[stone][i] >> rotation & 1) {
-				draw_cell(pos_x + i % 4, pos_y + i / 4, 0x777777, 0xaaaaaa);
+			if (STONE_DATA[grid->stone][i] >> grid->rotation & 1) {
+				draw_cell(grid->pos_x + i % 4, grid->pos_y + i / 4, 0x777777, 0xaaaaaa);
 			}
 		}
 	}
 	for (y = 0; y < GRID_HEIGHT; y++) {
-
-		if (state == BLINK && full_lines[y]) {
-			if (tick % 14 < 7) {
+		if (grid->state == BLINK && grid->full_lines[y]) {
+			if (grid->tick % 14 < 7) {
 				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, 0xdddddd, 0xffffff);
 			}
 		}
 		else {
 			for (x = 0; x < GRID_WIDTH; x++) {
-				if (cells[y][x]) draw_cell(x, y, 0x0000aa, 0x0000ff);
+				if (grid->cells[y][x]) draw_cell(x, y, 0x0000aa, 0x0000ff);
 			}
 		}
 	}
 }
-
 
 
 int main(int argc, char** argv) {
@@ -192,7 +183,10 @@ int main(int argc, char** argv) {
 
 	SDL_EnableKeyRepeat(100, 50);
 
-	new_stone();
+
+	Grid grid;
+	memset(&grid, 0, sizeof(grid));
+	new_stone(&grid);
 
 	int running = 1;
 	while (running) {
@@ -221,15 +215,14 @@ int main(int argc, char** argv) {
 			}
 		}
 
+		if (update(&grid, dx, dy, rot, fall)) running = 0;
 
-		if (update(dx, dy, rot, fall)) running = 0;
-
-		draw();
-
+		SDL_FillRect(screen, NULL, 0x222222);
+		draw(&grid);
 		SDL_Flip(screen);
 		SDL_Delay(10);
 	}
-	printf("Lines: %d\n", lines);
+	printf("Lines: %d\n", grid.lines);
 
 	SDL_Quit();
 	return 0;
