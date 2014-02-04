@@ -9,33 +9,43 @@ int rate_grid(Grid* grid) {
 	int x, y;
 	int magic = 0;
 
-	for (y = 0; y < GRID_HEIGHT; y++) {
-		for (x = 0; x < GRID_WIDTH; x++) {
-			if (!grid->cells[y][x]) {
-				if (y > 0 && grid->cells[y - 1][x]) magic -= 20;
+	// holes
+	for (x = 0; x < GRID_WIDTH; x++) {
+		int b = 0;
+		for (y = 0; y < GRID_HEIGHT; y++) {
+			if (grid->cells[y][x]) {
+				magic--;
+				b = 1;
 			}
-			else magic--;
+			else if (b) {
+				magic -= 25;
+			}
 		}
 	}
 
+	// slopes
 	int h = 0;
 	for (x = 0; x < GRID_WIDTH + 1; x++) {
 		for (y = 0; x < GRID_WIDTH && y < GRID_HEIGHT; y++) {
 			if (grid->cells[y][x]) break;
 		}
-		magic -= abs(y - h);
+		int d = abs(y - h);
+		magic -= d;
+		if (d > 2) magic -= (d - 2);
 		h = y;
 	}
 
 
+	// height
 	int height = 0;
 	for (y = GRID_HEIGHT - 1; y >= 0; y--) {
 		for (x = 0; x < GRID_WIDTH; x++) {
 			if (grid->cells[y][x]) height = GRID_HEIGHT - y - 1;
 		}
 	}
+	magic -= height * 2;
 
-	magic -= height * 5;
+
 	return magic;
 }
 
@@ -117,6 +127,7 @@ int bot(Grid* grid, int depth, int* dx, int* dy, int* rot, int* fall) {
 						*dx = (grid->x > save_x) - (grid->x < save_x);
 						*rot = save_rot != grid->rot;
 						*fall = grid->x - save_x == 0 && save_rot == grid->rot;
+						*dy = 1;
 					}
 				}
 
