@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <time.h>
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 
 #include "tetris.h"
 
@@ -16,17 +16,36 @@ const char STONE_DATA[7][16] = {
 };
 
 
-SDL_Surface* screen;
+SDL_Renderer* renderer;
 
 
 void draw_cell(int x, int y, uint32_t border, uint32_t fill) {
+/*
 	SDL_Rect rect = { x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
 	SDL_FillRect(screen, &rect, border);
 	rect.x = x * CELL_SIZE + 1;
 	rect.y = y * CELL_SIZE + 1;
 	rect.w = rect.h = CELL_SIZE - 2;
 	SDL_FillRect(screen, &rect, fill);
+*/
+	static SDL_Rect rect = { 0, 0, CELL_SIZE, CELL_SIZE };
+	rect.x = x * CELL_SIZE;
+	rect.y = y * CELL_SIZE;
+	SDL_SetRenderDrawColor(renderer,
+		(fill >> 16) & 255,
+		(fill >> 8) & 255,
+		(fill & 255), 255);
+
+
+	SDL_RenderFillRect(renderer, &rect);
+
+	SDL_SetRenderDrawColor(renderer,
+		(border >> 16) & 255,
+		(border >> 8) & 255,
+		(border & 255), 255);
+	SDL_RenderDrawRect(renderer, &rect);
 }
+
 
 
 int collision(const Grid* grid, int over) {
@@ -194,17 +213,11 @@ int main(int argc, char** argv) {
 		}
 	}
 //*/
-
-	SDL_Init(SDL_INIT_VIDEO);
-	screen = SDL_SetVideoMode(
+	SDL_Window* window;
+	SDL_CreateWindowAndRenderer(
 		GRID_WIDTH * CELL_SIZE,
 		GRID_HEIGHT * CELL_SIZE,
-		32, SDL_HWSURFACE | SDL_DOUBLEBUF);
-	if (!screen) {
-		SDL_Quit();
-		return 1;
-	}
-	SDL_EnableKeyRepeat(100, 50);
+		0, &window, &renderer);
 
 
 	int running = 1;
@@ -219,13 +232,13 @@ int main(int argc, char** argv) {
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_KEYDOWN:
-				if (event.key.keysym.sym == SDLK_ESCAPE) running = 0;
-				if (event.key.keysym.sym == SDLK_LEFT) dx--;
-				if (event.key.keysym.sym == SDLK_RIGHT) dx++;
-				if (event.key.keysym.sym == SDLK_DOWN) dy++;
-				if (event.key.keysym.sym == SDLK_x) rot--;
-				if (event.key.keysym.sym == SDLK_c) rot++;
-				if (event.key.keysym.sym == SDLK_SPACE) fall = 1;
+				if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) running = 0;
+				if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) dx--;
+				if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) dx++;
+				if (event.key.keysym.scancode == SDL_SCANCODE_DOWN) dy++;
+				if (event.key.keysym.scancode == SDL_SCANCODE_X) rot--;
+				if (event.key.keysym.scancode == SDL_SCANCODE_C) rot++;
+				if (event.key.keysym.scancode == SDL_SCANCODE_SPACE) fall = 1;
 				break;
 
 			case SDL_QUIT:
@@ -235,22 +248,28 @@ int main(int argc, char** argv) {
 		}
 
 		// bot
-		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
+//		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
 
 
 		update(&grid, dx, dy, rot, fall);
 		if (grid.state == OVER) running = 0;
 
 
-		SDL_FillRect(screen, NULL, 0x222222);
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+
 		draw(&grid);
-		SDL_Flip(screen);
+
+		SDL_RenderPresent(renderer);
 		SDL_Delay(10);
 	}
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+
+
 	printf("Stones: %d\n", grid.stones);
 	printf("Lines: %d\n", grid.lines);
 
-	SDL_Quit();
 	return 0;
 }
 
