@@ -4,7 +4,7 @@
 
 #include "tetris.h"
 
-const char STONE_DATA[7][16] = {
+const char STONE_DATA[STONE_COUNT][16] = {
 	{0x0,0xa,0x0,0x0,0x5,0xf,0x5,0x5,0x0,0xa,0x0,0x0,0x0,0xa}, // I
 	{0x0,0x0,0x0,0x0,0x0,0xf,0xf,0x0,0x0,0xf,0xf}, // O
 	{0x4,0x5,0x8,0x0,0xa,0xf,0xa,0x0,0x2,0x5,0x1}, // L
@@ -16,33 +16,37 @@ const char STONE_DATA[7][16] = {
 };
 
 
+typedef struct { int r, g, b; } Color;
+const Color STONE_COLOR[STONE_COUNT] = {
+	{ 127, 127, 127 },
+	{ 255, 0, 0 },
+	{ 0, 255, 0 },
+	{ 0, 0, 255 },
+	{ 255, 255, 0 },
+	{ 0, 255, 255 },
+	{ 255, 0, 255 },
+};
+
+
+
 SDL_Renderer* renderer;
 
 
-void draw_cell(int x, int y, uint32_t border, uint32_t fill) {
-/*
-	SDL_Rect rect = { x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
-	SDL_FillRect(screen, &rect, border);
-	rect.x = x * CELL_SIZE + 1;
-	rect.y = y * CELL_SIZE + 1;
-	rect.w = rect.h = CELL_SIZE - 2;
-	SDL_FillRect(screen, &rect, fill);
-*/
+void draw_cell(float x, float y, int c) {
 	static SDL_Rect rect = { 0, 0, CELL_SIZE, CELL_SIZE };
 	rect.x = x * CELL_SIZE;
 	rect.y = y * CELL_SIZE;
+
 	SDL_SetRenderDrawColor(renderer,
-		(fill >> 16) & 255,
-		(fill >> 8) & 255,
-		(fill & 255), 255);
-
-
+		STONE_COLOR[c].r,
+		STONE_COLOR[c].g,
+		STONE_COLOR[c].b, 255);
 	SDL_RenderFillRect(renderer, &rect);
 
 	SDL_SetRenderDrawColor(renderer,
-		(border >> 16) & 255,
-		(border >> 8) & 255,
-		(border & 255), 255);
+		STONE_COLOR[c].r / 2,
+		STONE_COLOR[c].g / 2,
+		STONE_COLOR[c].b / 2, 255);
 	SDL_RenderDrawRect(renderer, &rect);
 }
 
@@ -89,6 +93,19 @@ void new_stone(Grid* grid) {
 }
 
 
+void new_particle(Grid* grid, int x, int y, int c) {
+	Particle* p = malloc(sizeof(Particle));
+	p->c = c;
+	p->x = x;
+	p->y = y;
+	p->vx = rand() / (float)RAND_MAX - 0.5;
+	p->vy = rand() / (float)RAND_MAX - 0.9;
+	p->next = grid->particles;
+	grid->particles = p;
+}
+
+
+
 void update(Grid* grid, int dx, int dy, int rot, int fall) {
 
 	if (grid->state == NORMAL) {
@@ -118,15 +135,17 @@ void update(Grid* grid, int dx, int dy, int rot, int fall) {
 				return;
 			}
 
+			// write stone to cells
 			int x, y, i;
 			for (i = 0; i < 16; i++) {
 				if (STONE_DATA[grid->stone][i] >> grid->rot & 1) {
 					if (grid->y + i / 4 >= 0) {
-						grid->cells[grid->y + i / 4][grid->x + i % 4] = 1;
+						grid->cells[grid->y + i / 4][grid->x + i % 4] = grid->stone + 1;
 					}
 				}
 			}
 
+			// check for full lines
 			for (y = 0; y < GRID_HEIGHT; y++) {
 				for (x = 0; x < GRID_WIDTH; x++) {
 					if (grid->cells[y][x] == 0) break;
@@ -138,7 +157,7 @@ void update(Grid* grid, int dx, int dy, int rot, int fall) {
 					grid->state = BLINK;
 				}
 			}
-			if (grid->state != BLINK) new_stone(grid);
+			if (grid->state == NORMAL) new_stone(grid);
 		}
 	}
 
@@ -148,15 +167,37 @@ void update(Grid* grid, int dx, int dy, int rot, int fall) {
 			grid->state = NORMAL;
 			new_stone(grid);
 
-			int y;
+			// erase full lines
+			int y, x;
 			for (y = 0; y < GRID_HEIGHT; y++) {
 				if (grid->full_lines[y]) {
+					for (x = 0; x < GRID_WIDTH; x++) {
+						new_particle(grid, x, y, grid->cells[y][x] - 1);
+					}
+
 					memmove(grid->cells[1], grid->cells[0], y * sizeof(grid->cells[0]));
 					memset(grid->cells[0], 0, sizeof(grid->cells[0]));
 				}
 			}
 		}
 	}
+
+
+	Particle** p = &grid->particles;
+	while (*p) {
+		(*p)->vy += 0.05;
+		(*p)->x += (*p)->vx;
+		(*p)->y += (*p)->vy;
+		if ((*p)->y > GRID_HEIGHT + 1) {
+			Particle* t = *p;
+			*p = t->next;
+			free(t);
+		}
+		else {
+			p = &(*p)->next;
+		}
+	}
+
 }
 
 
@@ -166,22 +207,35 @@ void draw(const Grid* grid) {
 	||	grid->state == FALLING) {
 		for (i = 0; i < 16; i++) {
 			if (STONE_DATA[grid->stone][i] >> grid->rot & 1) {
-				draw_cell(grid->x + i % 4, grid->y + i / 4, 0x777777, 0xaaaaaa);
+				draw_cell(grid->x + i % 4, grid->y + i / 4, grid->stone);
 			}
 		}
 	}
 	for (y = 0; y < GRID_HEIGHT; y++) {
 		if (grid->state == BLINK && grid->full_lines[y]) {
 			if (grid->tick % 14 < 7) {
-				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, 0xdddddd, 0xffffff);
+				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, grid->cells[y][x] - 1);
 			}
 		}
 		else {
 			for (x = 0; x < GRID_WIDTH; x++) {
-				if (grid->cells[y][x]) draw_cell(x, y, 0x0000aa, 0x0000ff);
+				if (grid->cells[y][x]) draw_cell(x, y, grid->cells[y][x] - 1);
 			}
 		}
 	}
+
+	Particle* p;
+	for (p = grid->particles; p; p = p->next) {
+		draw_cell(p->x, p->y, p->c);
+	}
+
+}
+
+
+void init_grid(Grid* grid) {
+	memset(grid, 0, sizeof(Grid));
+	new_stone(grid);
+	grid->stones = 0;
 }
 
 
@@ -189,11 +243,8 @@ int main(int argc, char** argv) {
 	srand(time(NULL));
 
 	Grid grid;
+	init_grid(&grid);
 
-	// init grid
-	memset(&grid, 0, sizeof(grid));
-	new_stone(&grid);
-	grid.stones = 0;
 
 /*
 	// bot test
@@ -207,9 +258,7 @@ int main(int argc, char** argv) {
 		if (grid.state == OVER || grid.lines > 1000) {
 			printf("%8d\n", grid.lines);
 
-			memset(&grid, 0, sizeof(grid));
-			new_stone(&grid);
-			grid.stones = 0;
+			init_grid(&grid);
 		}
 	}
 //*/
@@ -248,14 +297,14 @@ int main(int argc, char** argv) {
 		}
 
 		// bot
-//		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
+		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
 
 
 		update(&grid, dx, dy, rot, fall);
 		if (grid.state == OVER) running = 0;
 
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
 		SDL_RenderClear(renderer);
 
 		draw(&grid);

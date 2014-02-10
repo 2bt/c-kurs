@@ -11,6 +11,17 @@ enum {
 };
 
 
+typedef struct Particle Particle;
+struct Particle {
+	Particle* next;
+	int c;
+	float x;
+	float y;
+	float vx;
+	float vy;
+};
+
+
 typedef struct {
 	int x;
 	int y;
@@ -24,6 +35,7 @@ typedef struct {
 	enum { NORMAL, FALLING, BLINK, OVER } state;
 	int cells[GRID_HEIGHT][GRID_WIDTH];
 	int full_lines[GRID_HEIGHT];
+	Particle* particles;
 } Grid;
 
 

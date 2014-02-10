@@ -107,8 +107,8 @@ int bot(Grid* grid, int depth, int* dx, int* dy, int* rot, int* fall) {
 				}
 
 				int m;
-				if (depth < 1) {
-//				if (0) {
+//				if (depth < 1) {
+				if (0) {
 					m = INT_MAX;
 					tmp_grid.x = GRID_WIDTH / 2 - 2;
 					tmp_grid.y = -1;
