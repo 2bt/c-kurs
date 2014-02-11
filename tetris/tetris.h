@@ -36,6 +36,7 @@ typedef struct {
 	int cells[GRID_HEIGHT][GRID_WIDTH];
 	int full_lines[GRID_HEIGHT];
 	Particle* particles;
+	int quake;
 } Grid;
 
 

@@ -171,6 +171,9 @@ void update(Grid* grid, int dx, int dy, int rot, int fall) {
 			int y, x;
 			for (y = 0; y < GRID_HEIGHT; y++) {
 				if (grid->full_lines[y]) {
+
+					grid->quake += 20;
+
 					for (x = 0; x < GRID_WIDTH; x++) {
 						new_particle(grid, x, y, grid->cells[y][x] - 1);
 					}
@@ -197,36 +200,47 @@ void update(Grid* grid, int dx, int dy, int rot, int fall) {
 			p = &(*p)->next;
 		}
 	}
+	if (grid->quake > 0) grid->quake--;
 
 }
 
 
 void draw(const Grid* grid) {
+	int q = grid->quake * 0.2;
+	if (q > 1) q = 1;
+	float qx = (rand() / (float) RAND_MAX - 0.5) * q;
+	float qy = (rand() / (float) RAND_MAX - 0.5) * q;
+
+
 	int x, y, i;
 	if (grid->state == NORMAL
 	||	grid->state == FALLING) {
 		for (i = 0; i < 16; i++) {
 			if (STONE_DATA[grid->stone][i] >> grid->rot & 1) {
-				draw_cell(grid->x + i % 4, grid->y + i / 4, grid->stone);
+				draw_cell(qx + grid->x + i % 4, qy + grid->y + i / 4, grid->stone);
 			}
 		}
 	}
 	for (y = 0; y < GRID_HEIGHT; y++) {
 		if (grid->state == BLINK && grid->full_lines[y]) {
 			if (grid->tick % 14 < 7) {
-				for (x = 0; x < GRID_WIDTH; x++) draw_cell(x, y, grid->cells[y][x] - 1);
+				for (x = 0; x < GRID_WIDTH; x++) {
+					draw_cell(qx + x, qy + y, grid->cells[y][x] - 1);
+				}
 			}
 		}
 		else {
 			for (x = 0; x < GRID_WIDTH; x++) {
-				if (grid->cells[y][x]) draw_cell(x, y, grid->cells[y][x] - 1);
+				if (grid->cells[y][x]) {
+					draw_cell(qx + x, qy + y, grid->cells[y][x] - 1);
+				}
 			}
 		}
 	}
 
 	Particle* p;
 	for (p = grid->particles; p; p = p->next) {
-		draw_cell(p->x, p->y, p->c);
+		draw_cell(qx + p->x, qy + p->y, p->c);
 	}
 
 }
