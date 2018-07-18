@@ -259,23 +259,6 @@ int main(int argc, char** argv) {
 	Grid grid;
 	init_grid(&grid);
 
-
-/*
-	// bot test
-	int dx = 0;
-	int dy = 0;
-	int rot = 0;
-	int fall = 0;
-	while (1) {
-		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
-		update(&grid, dx, dy, rot, fall);
-		if (grid.state == OVER || grid.lines > 1000) {
-			printf("%8d\n", grid.lines);
-
-			init_grid(&grid);
-		}
-	}
-//*/
 	SDL_Window* window;
 	SDL_CreateWindowAndRenderer(
 		GRID_WIDTH * CELL_SIZE,
@@ -311,7 +294,9 @@ int main(int argc, char** argv) {
 		}
 
 		// bot
-		if (grid.state == NORMAL) bot(&grid, 0, &dx, &dy, &rot, &fall);
+        if (grid.state == NORMAL && SDL_GetKeyboardState(NULL)[SDL_SCANCODE_TAB]) {
+            bot(&grid, 0, &dx, &dy, &rot, &fall);
+        }
 
 
 		update(&grid, dx, dy, rot, fall);
